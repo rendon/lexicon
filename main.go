@@ -6,11 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"lexicon/api"
 	"lexicon/db"
 	"lexicon/util"
 	"log"
-	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -27,61 +26,6 @@ const (
 const (
 	DictionaryApi = "dictionaryapi.com"
 )
-
-type GetDefinitionResult []struct {
-	Date     string   `json:"date"`
-	Fl       string   `json:"fl"`
-	Shortdef []string `json:"shortdef"`
-}
-
-func getDictionaryApiKey() string {
-	return os.Getenv("DICTIONARY_API_KEY")
-}
-
-func getDefinition(word string) (string, error) {
-	key := getDictionaryApiKey()
-	if len(key) == 0 {
-		return "", errors.New("missing API key")
-	}
-	u := fmt.Sprintf(
-		`https://dictionaryapi.com/api/v3/references/collegiate/json/%s?key=%s`,
-		url.QueryEscape(word), key,
-	)
-	res, err := http.Get(u)
-	if err != nil {
-		return "", err
-	}
-
-	buf, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if res.StatusCode != http.StatusOK {
-		log.Printf("Got non-OK response %s: %s", res.Status, string(buf))
-		return "", fmt.Errorf("service returned %s", res.Status)
-	}
-
-	var data GetDefinitionResult
-	if err := json.Unmarshal(buf, &data); err != nil {
-		return "", err
-	}
-	if len(data) < 1 {
-		return "", errors.New("found no definitions")
-	}
-	var definition string
-	for _, def := range data {
-		// Assuming shortdef has at least one entry
-		if len(def.Shortdef) >= 1 {
-			definition += fmt.Sprintf("%s\n", def.Fl)
-			for _, sd := range def.Shortdef {
-				definition += fmt.Sprintf(": %s\n", sd)
-			}
-			definition += "\n"
-		}
-	}
-	return definition, nil
-}
 
 func defineName(lexicon *db.Lexicon, name string) error {
 	res, err := lexicon.Find(name)
@@ -103,12 +47,25 @@ func defineName(lexicon *db.Lexicon, name string) error {
 
 func printLexeme(lexeme *db.Lexeme, status WordStatus) {
 	label := labelName(status)
-	def := abridgeDefinition(lexeme.Definition)
+	// def := abridgeDefinition(lexeme.Definition)
 	fmt.Printf("\n%s\t%s", lexeme.Name, label)
 	fmt.Printf("\n%s\n", strings.Repeat("=", len(lexeme.Name)))
 
 	fmt.Printf("Added on %s\n\n", util.FormatTime(lexeme.CreatedAt))
-	fmt.Printf("%s\n", def)
+
+	var lex api.Lexeme
+	if err := json.Unmarshal([]byte(lexeme.Definition), &lex); err != nil {
+		log.Printf("Unable to parse definition: %s", err)
+		return
+	}
+	for _, e := range lex.Entries {
+		fmt.Printf("%s — %s\n", e.Headword.Text, e.GrammaticalFunction)
+		for _, sd := range e.ShortDefinitions {
+			fmt.Printf("\t%s\n", sd)
+		}
+		fmt.Println()
+	}
+	fmt.Println()
 }
 
 func labelName(status WordStatus) string {
@@ -126,14 +83,20 @@ func abridgeDefinition(def string) string {
 }
 
 func saveDefinition(lexicon *db.Lexicon, name string) (*db.Lexeme, error) {
-	def, err := getDefinition(name)
+	def, err := api.Define(name)
 	if err != nil {
+		return nil, err
+	}
+
+	out, err := json.Marshal(def)
+	if err != nil {
+		log.Printf("Unable to serialize lexeme: %s", err)
 		return nil, err
 	}
 
 	lexeme := &db.Lexeme{
 		Name:       name,
-		Definition: def,
+		Definition: string(out),
 		Source:     DictionaryApi,
 		CreatedAt:  time.Now(),
 	}
