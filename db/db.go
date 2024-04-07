@@ -115,12 +115,25 @@ func (d *Lexicon) Save(lexeme *Lexeme) error {
 	lexeme.UpdatedAt = time.Now()
 	_, err = stmt.Exec(
 		lexeme.Name, lexeme.Definition, lexeme.Source,
-		lexeme.CreatedAt.Unix()*1000,
-		lexeme.UpdatedAt.Unix()*1000,
+		lexeme.CreatedAt.UnixMilli(),
+		lexeme.UpdatedAt.UnixMilli(),
 	)
 	if err != nil {
 		log.Printf("Unable to insert record: %s", err)
 		return err
 	}
 	return nil
+}
+
+// UpdateTimestamps updates an entry's timestamps.
+// TODO: Generalize function --> Update()
+func (d *Lexicon) UpdateTimestamps(lexeme Lexeme) error {
+	stmt, err := d.db.Prepare(`UPDATE lexicon SET createdAt = ?, updatedAt = ? WHERE name = ?`)
+	if err != nil {
+		return fmt.Errorf("unable to prepare update statement: %s", err)
+	}
+
+	defer stmt.Close()
+	_, err = stmt.Exec(lexeme.CreatedAt.UnixMilli(), lexeme.UpdatedAt.UnixMilli(), lexeme.Name)
+	return err
 }

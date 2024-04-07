@@ -11,6 +11,7 @@ import (
 	"lexicon/db"
 	"lexicon/util"
 	"log"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -35,10 +36,15 @@ const (
 	FullDef
 )
 
-func defineName(lexicon *db.Lexicon, name string) error {
+func defineName(lexicon *db.Lexicon, name string, waitTime time.Duration) error {
 	res, err := lexicon.Find(name)
 	if err != nil {
 		if errors.Is(err, db.NotFound) {
+			// Wait time so as not to overload the service and get throttled/blocked.
+			// TODO: Improve this hack for define-batch.
+			log.Printf("Waiting %v", waitTime)
+			time.Sleep(waitTime)
+
 			res, err = saveDefinition(lexicon, name)
 			if err != nil {
 				return err
@@ -50,6 +56,7 @@ func defineName(lexicon *db.Lexicon, name string) error {
 		}
 	}
 	printLexeme(res, SavedWord, ShortDef)
+
 	return nil
 }
 
@@ -188,7 +195,7 @@ func interactive(lexicon *db.Lexicon) {
 			continue
 		}
 
-		if err := defineName(lexicon, input); err != nil {
+		if err := defineName(lexicon, input, 0); err != nil {
 			log.Printf("Unable to define %q: %s", input, err)
 		}
 	}
@@ -204,9 +211,63 @@ func main() {
 	}
 	defer lexicon.Close()
 
-	if len(os.Args) == 1 {
+	if len(os.Args) <= 1 {
 		// Launch the lexicon in interactive mode
 		interactive(lexicon)
 		return
 	}
+
+	command := os.Args[1]
+	if command == "define-batch" {
+		if err := defineBatch(lexicon); err != nil {
+			log.Fatalf("define-batch failed with error: %s", err)
+		}
+	}
+}
+
+// defineBatch reads words from a file and defines all words in it. If the words contain a timestamp
+// the createdAt and updatedAt timestamps are set to such timestamp. This command is useful for
+// importing words from other sources while still keeping the original dates.
+func defineBatch(lexicon *db.Lexicon) error {
+	if len(os.Args) < 3 {
+		return errors.New("missing file name")
+	}
+	f, err := os.Open(os.Args[2])
+	if err != nil {
+		return err
+	}
+	buf, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(buf)), "\n")
+	for _, line := range lines {
+		log.Printf("%q", line)
+		tokens := strings.Split(line, ",")
+		name := tokens[0]
+		waitTime := time.Millisecond * time.Duration(100+rand.Intn(2000))
+		if err := defineName(lexicon, name, waitTime); err != nil {
+			log.Printf("Define name for %q failed with error: %s", name, err)
+		}
+
+		// The word has a timestamp, we'll update the database timestamps
+		if len(tokens) == 2 {
+			timestamp, err := time.Parse("2006-01-02 15:04:05", tokens[1])
+			if err != nil {
+				log.Printf("Unable to parse timestamp: %s", err)
+				return err
+			}
+
+			var lexeme = db.Lexeme{
+				Name:      name,
+				UpdatedAt: timestamp,
+				CreatedAt: timestamp,
+			}
+			if err := lexicon.UpdateTimestamps(lexeme); err != nil {
+				log.Printf("Unable to update %s's timestamps: %s", name, err)
+			}
+		}
+	}
+	return nil
 }
