@@ -22,9 +22,12 @@ func Define(name string) (*Lexeme, error) {
 	if len(key) == 0 {
 		return nil, errors.New("missing API key")
 	}
+
+	// url.QueryEscape() vs url. PathEscape().
+	// See https://stackoverflow.com/q/2678551/526189
 	u := fmt.Sprintf(
 		`https://dictionaryapi.com/api/v3/references/collegiate/json/%s?key=%s`,
-		url.QueryEscape(name), key,
+		url.PathEscape(name), url.QueryEscape(key),
 	)
 	res, err := http.Get(u)
 	if err != nil {
