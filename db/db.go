@@ -115,7 +115,8 @@ func (d *Lexicon) Save(lexeme *Lexeme) error {
 	lexeme.UpdatedAt = time.Now()
 	_, err = stmt.Exec(
 		lexeme.Name, lexeme.Definition, lexeme.Source,
-		lexeme.CreatedAt.Unix(), lexeme.UpdatedAt.Unix(),
+		lexeme.CreatedAt.Unix()*1000,
+		lexeme.UpdatedAt.Unix()*1000,
 	)
 	if err != nil {
 		log.Printf("Unable to insert record: %s", err)
