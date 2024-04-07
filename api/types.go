@@ -44,14 +44,14 @@ type DHwi struct {
 }
 
 type DEntry struct {
-	Meta     DMeta      `json:"meta"`
-	Hwi      DHwi       `json:"hwi"`
-	Fl       string     `json:"fl"`
-	Def      []MDef     `json:"def"`
-	Quotes   []DQuote   `json:"quotes,omitempty"`
-	Et       [][]string `json:"et,omitempty"`
-	Date     string     `json:"date,omitempty"`
-	Shortdef []string   `json:"shortdef"`
+	Meta     DMeta           `json:"meta"`
+	Hwi      DHwi            `json:"hwi"`
+	Fl       string          `json:"fl"`
+	Def      []MDef          `json:"def"`
+	Quotes   []DQuote        `json:"quotes,omitempty"`
+	Et       [][]interface{} `json:"et,omitempty"`
+	Date     string          `json:"date,omitempty"`
+	Shortdef []string        `json:"shortdef"`
 	Ins      []struct {
 		If string `json:"if"`
 	} `json:"ins,omitempty"`
