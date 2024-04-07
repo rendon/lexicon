@@ -15,6 +15,8 @@ func getDictionaryApiKey() string {
 	return os.Getenv("DICTIONARY_API_KEY")
 }
 
+var NotFound = errors.New("found no definitions")
+
 func Define(name string) (*Lexeme, error) {
 	key := getDictionaryApiKey()
 	if len(key) == 0 {
@@ -39,18 +41,37 @@ func Define(name string) (*Lexeme, error) {
 		return nil, fmt.Errorf("service returned %s", res.Status)
 	}
 
+	ss := parseSpellingSuggestions(buf)
+	if len(ss) > 0 {
+		message := "The word you've entered isn't in the dictionary. Spelling suggestions:\n"
+		for _, e := range ss {
+			message += fmt.Sprintf("• %s\n", e)
+		}
+		return nil, errors.New(message)
+	}
+
 	var data GetDefinitionResult
 	if err := json.Unmarshal(buf, &data); err != nil {
 		return nil, err
 	}
 	if len(data) < 1 {
-		return nil, errors.New("found no definitions")
+		return nil, NotFound
 	}
 	var lexeme Lexeme
 	for _, entry := range data {
 		lexeme.Entries = append(lexeme.Entries, parseEntry(entry))
 	}
 	return &lexeme, nil
+}
+
+// parseSpellingSuggestions tries to parse spelling suggestions, which is an array of strings. If
+// successful, it returns the list of suggestions, otherwise, it returns an empty array.
+func parseSpellingSuggestions(buf []byte) []string {
+	var suggestions []string
+	if err := json.Unmarshal(buf, &suggestions); err != nil {
+		return []string{}
+	}
+	return suggestions
 }
 
 func parseEntry(entry DEntry) Entry {
