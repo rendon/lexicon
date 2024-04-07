@@ -21,3 +21,14 @@ Build the binary:
 ```sh
 go build
 ```
+
+## How to use
+Simply execute the binary like so:
+```sh
+./lexicon
+```
+
+You can also install the binary so it's available everywhere. Just make sure the `$GOPATH/bin/` directory is part of your `$PATH`:
+```sh
+go install
+```

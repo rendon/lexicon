@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/fatih/color"
 	"io"
 	"lexicon/api"
 	"lexicon/db"
@@ -27,6 +28,13 @@ const (
 	DictionaryApi = "dictionaryapi.com"
 )
 
+type PrintMode int
+
+const (
+	ShortDef PrintMode = iota
+	FullDef
+)
+
 func defineName(lexicon *db.Lexicon, name string) error {
 	res, err := lexicon.Find(name)
 	if err != nil {
@@ -35,37 +43,74 @@ func defineName(lexicon *db.Lexicon, name string) error {
 			if err != nil {
 				return err
 			}
-			printLexeme(res, NewWord)
+			printLexeme(res, NewWord, FullDef)
 			return nil
 		} else {
 			return err
 		}
 	}
-	printLexeme(res, SavedWord)
+	printLexeme(res, SavedWord, ShortDef)
 	return nil
 }
 
-func printLexeme(lexeme *db.Lexeme, status WordStatus) {
+func printLexeme(lexeme *db.Lexeme, status WordStatus, printMode PrintMode) {
+	fmt.Println()
 	label := labelName(status)
-	// def := abridgeDefinition(lexeme.Definition)
-	fmt.Printf("\n%s\t%s", lexeme.Name, label)
-	fmt.Printf("\n%s\n", strings.Repeat("=", len(lexeme.Name)))
 
-	fmt.Printf("Added on %s\n\n", util.FormatTime(lexeme.CreatedAt))
+	title := color.New(color.FgGreen, color.Bold)
+	_, _ = title.Printf("\n%s", lexeme.Name)
+	fmt.Printf("\t%s", color.RedString(label))
+
+	_, _ = title.Printf("\n%s\n", strings.Repeat("=", len(lexeme.Name)))
+
+	fmt.Printf("Added on %s\n", util.FormatTime(lexeme.CreatedAt))
 
 	var lex api.Lexeme
 	if err := json.Unmarshal([]byte(lexeme.Definition), &lex); err != nil {
 		log.Printf("Unable to parse definition: %s", err)
 		return
 	}
-	for _, e := range lex.Entries {
-		fmt.Printf("%s — %s\n", e.Headword.Text, e.GrammaticalFunction)
-		for _, sd := range e.ShortDefinitions {
-			fmt.Printf("\t%s\n", sd)
-		}
+
+	subtitle := color.New(color.FgBlue)
+	for i, e := range lex.Entries {
 		fmt.Println()
+		_, _ = subtitle.Printf("%s — %s\n", e.Headword.Text, e.GrammaticalFunction)
+		for _, sd := range e.ShortDefinitions {
+			fmt.Printf("%s\n", sd)
+		}
+		if printMode == ShortDef {
+			continue
+		}
+
+		for _, d := range e.Definitions {
+			printDefinition(d)
+		}
+		if i+1 < len(lex.Entries) {
+			fmt.Printf("%s\n", strings.Repeat("—", 80))
+		}
 	}
+}
+
+func printDefinition(d api.Definition) {
 	fmt.Println()
+	if len(d.VerbDivider) > 0 {
+		fmt.Printf("%s\n", d.VerbDivider)
+	}
+	for _, s := range d.Senses {
+		fmt.Printf("%s\n", s.Text)
+
+		if len(s.UsageNotes) > 0 {
+			for _, u := range s.UsageNotes {
+				fmt.Printf("  •%q\n", u)
+			}
+		}
+		if len(s.VerbalIllustrations) > 0 {
+			for _, i := range s.VerbalIllustrations {
+				fmt.Printf("  • %q\n", i)
+			}
+			fmt.Println()
+		}
+	}
 }
 
 func labelName(status WordStatus) string {
