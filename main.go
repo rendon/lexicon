@@ -85,6 +85,14 @@ func printLexeme(lexeme *db.Lexeme, status WordStatus, printMode PrintMode) {
 		for _, d := range e.Definitions {
 			printDefinition(d)
 		}
+
+		if len(e.Quotes) > 0 {
+			log.Printf("\n%s", color.BlueString("Quotes"))
+			for _, q := range e.Quotes {
+				printQuote(q)
+			}
+		}
+
 		if i+1 < len(lex.Entries) {
 			fmt.Printf("%s\n", strings.Repeat("—", 80))
 		}
@@ -111,6 +119,11 @@ func printDefinition(d api.Definition) {
 			fmt.Println()
 		}
 	}
+}
+
+func printQuote(q api.Quote) {
+	fmt.Printf("  %q\n", q.Text)
+	fmt.Printf("  %s, %s, %s\n\n", q.Source, q.Author, q.PublicationDate)
 }
 
 func labelName(status WordStatus) string {
