@@ -42,7 +42,6 @@ func defineName(lexicon *db.Lexicon, name string, waitTime time.Duration) error 
 		if errors.Is(err, db.NotFound) {
 			// Wait time so as not to overload the service and get throttled/blocked.
 			// TODO: Improve this hack for define-batch.
-			log.Printf("Waiting %v", waitTime)
 			time.Sleep(waitTime)
 
 			res, err = saveDefinition(lexicon, name)
@@ -241,6 +240,7 @@ func defineBatch(lexicon *db.Lexicon) error {
 		return err
 	}
 
+	var failed []string
 	lines := strings.Split(strings.TrimSpace(string(buf)), "\n")
 	for _, line := range lines {
 		log.Printf("%q", line)
@@ -249,6 +249,8 @@ func defineBatch(lexicon *db.Lexicon) error {
 		waitTime := time.Millisecond * time.Duration(100+rand.Intn(2000))
 		if err := defineName(lexicon, name, waitTime); err != nil {
 			log.Printf("Define name for %q failed with error: %s", name, err)
+			failed = append(failed, line)
+			continue
 		}
 
 		// The word has a timestamp, we'll update the database timestamps
@@ -268,6 +270,13 @@ func defineBatch(lexicon *db.Lexicon) error {
 				log.Printf("Unable to update %s's timestamps: %s", name, err)
 			}
 		}
+	}
+
+	log.Println()
+	log.Printf("Successful definitions: %d", len(lines)-len(failed))
+	log.Printf("Failed definitions: %d", len(failed))
+	for _, f := range failed {
+		log.Printf("• %s", f)
 	}
 	return nil
 }
