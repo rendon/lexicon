@@ -184,7 +184,7 @@ func interactive(lexicon *db.Lexicon) {
 			continue
 		}
 
-		input := strings.TrimSpace(line)
+		input := strings.ToLower(strings.TrimSpace(line))
 		if strings.TrimSpace(input) == "!exit" {
 			break
 		}
@@ -245,7 +245,7 @@ func defineBatch(lexicon *db.Lexicon) error {
 	for _, line := range lines {
 		log.Printf("%q", line)
 		tokens := strings.Split(line, ",")
-		name := tokens[0]
+		name := strings.ToLower(tokens[0])
 		waitTime := time.Millisecond * time.Duration(100+rand.Intn(2000))
 		if err := defineName(lexicon, name, waitTime); err != nil {
 			log.Printf("Define name for %q failed with error: %s", name, err)
