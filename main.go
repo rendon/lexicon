@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/fatih/color"
 	"io"
 	"lexicon/api"
 	"lexicon/db"
@@ -15,6 +14,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/fatih/color"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -36,6 +37,8 @@ const (
 	FullDef
 )
 
+const entrySeparator = "---"
+
 func defineName(lexicon *db.Lexicon, name string, waitTime time.Duration) error {
 	res, err := lexicon.Find(name)
 	if err != nil {
@@ -48,7 +51,7 @@ func defineName(lexicon *db.Lexicon, name string, waitTime time.Duration) error 
 			if err != nil {
 				return err
 			}
-			printLexeme(res, NewWord, FullDef)
+			printLexeme(res, NewWord, ShortDef)
 			return nil
 		} else {
 			return err
@@ -60,16 +63,17 @@ func defineName(lexicon *db.Lexicon, name string, waitTime time.Duration) error 
 }
 
 func printLexeme(lexeme *db.Lexeme, status WordStatus, printMode PrintMode) {
-	fmt.Println()
+	var out = new(strings.Builder)
+	_, _ = fmt.Fprintf(out, "\n")
 	label := labelName(status)
 
 	title := color.New(color.FgGreen, color.Bold)
-	_, _ = title.Printf("\n%s", lexeme.Name)
-	fmt.Printf("\t%s", color.RedString(label))
+	_, _ = fmt.Fprintf(out, "%s", title.Sprintf("\n%s", lexeme.Name))
+	_, _ = fmt.Fprintf(out, "\t%s", color.RedString(label))
 
-	_, _ = title.Printf("\n%s\n", strings.Repeat("=", len(lexeme.Name)))
+	_, _ = fmt.Fprintf(out, "%s", title.Sprintf("\n%s\n", strings.Repeat("=", len(lexeme.Name))))
 
-	fmt.Printf("Added on %s\n", util.FormatTime(lexeme.CreatedAt))
+	_, _ = fmt.Fprintf(out, "Added on %s\n", util.FormatTime(lexeme.CreatedAt))
 
 	var lex api.Lexeme
 	if err := json.Unmarshal([]byte(lexeme.Definition), &lex); err != nil {
@@ -79,57 +83,77 @@ func printLexeme(lexeme *db.Lexeme, status WordStatus, printMode PrintMode) {
 
 	subtitle := color.New(color.FgBlue)
 	for i, e := range lex.Entries {
-		fmt.Println()
-		_, _ = subtitle.Printf("%s — %s\n", e.Headword.Text, e.GrammaticalFunction)
+		_, _ = fmt.Fprintf(out, "\n")
+		_, _ = fmt.Fprintf(out, "%s", subtitle.Sprintf("%s — %s\n", e.Headword.Text, e.GrammaticalFunction))
 		for _, sd := range e.ShortDefinitions {
-			fmt.Printf("%s\n", sd)
+			_, _ = fmt.Fprintf(out, "• %s\n", sd)
 		}
-		if printMode == ShortDef {
-			continue
-		}
+		if printMode == FullDef {
+			for _, d := range e.Definitions {
+				printDefinition(out, d)
+			}
 
-		for _, d := range e.Definitions {
-			printDefinition(d)
-		}
+			if len(e.Quotes) > 0 {
+				_, _ = fmt.Fprintf(out, "\n%s\n", color.BlueString("Quotes"))
+				for _, q := range e.Quotes {
+					printQuote(out, q)
+				}
+			}
 
-		if len(e.Quotes) > 0 {
-			log.Printf("\n%s", color.BlueString("Quotes"))
-			for _, q := range e.Quotes {
-				printQuote(q)
+			if i+1 < len(lex.Entries) {
+				_, _ = fmt.Fprintf(out, "%s\n", strings.Repeat("—", 80))
 			}
 		}
-
-		if i+1 < len(lex.Entries) {
-			fmt.Printf("%s\n", strings.Repeat("—", 80))
-		}
+		_, _ = fmt.Fprintf(out, "%s\n", entrySeparator)
 	}
+
+	fmt.Print(abridgeOutput(out))
 }
 
-func printDefinition(d api.Definition) {
-	fmt.Println()
+// abridgeOutput shortens the output so that it can fit nicely on a screen w/o scrolling.
+func abridgeOutput(builder *strings.Builder) string {
+	lines := strings.Split(builder.String(), "\n")
+	var out strings.Builder
+	for i, line := range lines {
+		if line == entrySeparator {
+			// Arbitrary number
+			// TODO: Make this value configurable.
+			if i > 25 {
+				break
+			} else {
+				continue
+			}
+		}
+		_, _ = fmt.Fprintf(&out, "%s\n", line)
+	}
+	return out.String()
+}
+
+func printDefinition(out *strings.Builder, d api.Definition) {
+	_, _ = fmt.Fprintf(out, "\n")
 	if len(d.VerbDivider) > 0 {
-		fmt.Printf("%s\n", d.VerbDivider)
+		_, _ = fmt.Fprintf(out, "%s\n", d.VerbDivider)
 	}
 	for _, s := range d.Senses {
-		fmt.Printf("%s\n", s.Text)
+		_, _ = fmt.Fprintf(out, "%s\n", s.Text)
 
 		if len(s.UsageNotes) > 0 {
 			for _, u := range s.UsageNotes {
-				fmt.Printf("  •%q\n", u)
+				_, _ = fmt.Fprintf(out, "  •%q\n", u)
 			}
 		}
 		if len(s.VerbalIllustrations) > 0 {
 			for _, i := range s.VerbalIllustrations {
-				fmt.Printf("  • %q\n", i)
+				_, _ = fmt.Fprintf(out, "  • %q\n", i)
 			}
-			fmt.Println()
+			_, _ = fmt.Fprintf(out, "\n")
 		}
 	}
 }
 
-func printQuote(q api.Quote) {
-	fmt.Printf("  %q\n", q.Text)
-	fmt.Printf("  %s, %s, %s\n\n", q.Source, q.Author, q.PublicationDate)
+func printQuote(out *strings.Builder, q api.Quote) {
+	_, _ = fmt.Fprintf(out, "  %q\n", q.Text)
+	_, _ = fmt.Fprintf(out, "  %s, %s, %s\n\n", q.Source, q.Author, q.PublicationDate)
 }
 
 func labelName(status WordStatus) string {
@@ -137,13 +161,6 @@ func labelName(status WordStatus) string {
 		return "\tNew"
 	}
 	return ""
-}
-
-// abridgeDefinition limits the output to 16 lines.
-func abridgeDefinition(def string) string {
-	lines := strings.Split(def, "\n")
-	maxLines := util.Min(len(lines), 20)
-	return strings.Join(lines[0:maxLines], "\n")
 }
 
 func saveDefinition(lexicon *db.Lexicon, name string) (*db.Lexeme, error) {
