@@ -15,7 +15,8 @@ func getDictionaryApiKey() string {
 	return os.Getenv("DICTIONARY_API_KEY")
 }
 
-var NotFound = errors.New("found no definitions")
+var DefNotFound = errors.New("found no definitions")
+var WodNotFound = errors.New("word of the day not found")
 
 func Define(name string) (*Lexeme, error) {
 	key := getDictionaryApiKey()
@@ -33,6 +34,7 @@ func Define(name string) (*Lexeme, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 
 	buf, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -58,7 +60,7 @@ func Define(name string) (*Lexeme, error) {
 		return nil, err
 	}
 	if len(data) < 1 {
-		return nil, NotFound
+		return nil, DefNotFound
 	}
 	var lexeme Lexeme
 	for _, entry := range data {
@@ -224,4 +226,32 @@ func parseQuotes(quotes []DQuote) []Quote {
 		})
 	}
 	return res
+}
+
+func GetWod(date string) (*Wod, error) {
+	u := fmt.Sprintf("http://localhost:8000/wod/%s", url.PathEscape(date))
+	res, err := http.Get(u)
+	if err != nil {
+		log.Printf("HTTP call to %s failed with error: %s", u, err)
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusNotFound {
+		return nil, WodNotFound
+	}
+
+	buf, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Printf("Unable to read response's body: %s", err)
+		return nil, err
+	}
+
+	var wod Wod
+	if err := json.Unmarshal(buf, &wod); err != nil {
+		log.Printf("Unable to unmarshal response's body: %s", err)
+		return nil, err
+	}
+
+	return &wod, nil
 }

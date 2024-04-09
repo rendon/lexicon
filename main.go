@@ -217,30 +217,6 @@ func interactive(lexicon *db.Lexicon) {
 	}
 }
 
-func main() {
-	log.SetFlags(0)
-	log.SetOutput(os.Stdout)
-
-	lexicon, err := db.NewLexicon()
-	if err != nil {
-		log.Fatalf("Failed to set up database: %s", err)
-	}
-	defer lexicon.Close()
-
-	if len(os.Args) <= 1 {
-		// Launch the lexicon in interactive mode
-		interactive(lexicon)
-		return
-	}
-
-	command := os.Args[1]
-	if command == "define-batch" {
-		if err := defineBatch(lexicon); err != nil {
-			log.Fatalf("define-batch failed with error: %s", err)
-		}
-	}
-}
-
 // defineBatch reads words from a file and defines all words in it. If the words contain a timestamp
 // the createdAt and updatedAt timestamps are set to such timestamp. This command is useful for
 // importing words from other sources while still keeping the original dates.
@@ -296,4 +272,48 @@ func defineBatch(lexicon *db.Lexicon) error {
 		log.Printf("• %s", f)
 	}
 	return nil
+}
+
+func wod(_ *db.Lexicon) error {
+	now := time.Now()
+	date := fmt.Sprintf("%04d-%02d-%02d", now.Year(), now.Month(), now.Day())
+	if len(os.Args) >= 4 && os.Args[2] == "--date" && len(os.Args[3]) > 0 {
+		date = os.Args[3]
+	}
+
+	res, err := api.GetWod(date)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s %s\n", res.Date, res.Word)
+	return nil
+}
+
+func main() {
+	log.SetFlags(0)
+	log.SetOutput(os.Stdout)
+
+	lexicon, err := db.NewLexicon()
+	if err != nil {
+		log.Fatalf("Failed to set up database: %s", err)
+	}
+	defer lexicon.Close()
+
+	if len(os.Args) <= 1 {
+		// Launch the lexicon in interactive mode
+		interactive(lexicon)
+		return
+	}
+
+	command := os.Args[1]
+	if command == "define-batch" {
+		if err := defineBatch(lexicon); err != nil {
+			log.Fatalf("define-batch failed with error: %q", err)
+		}
+	} else if command == "wod" {
+		if err := wod(lexicon); err != nil {
+			log.Fatalf("wod failed with error: %q", err)
+		}
+	}
 }

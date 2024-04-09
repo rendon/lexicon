@@ -138,3 +138,9 @@ type Entry struct {
 type Lexeme struct {
 	Entries []Entry `json:"entries,omitempty"`
 }
+
+// Wod represents a Word of the Day.
+type Wod struct {
+	Date string `json:"date"`
+	Word string `json:"word"`
+}
