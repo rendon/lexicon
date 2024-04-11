@@ -13,7 +13,7 @@ func Min(a, b int) int {
 	return b
 }
 
-// FormatTime returns Time as a string with this format yyyy-mm-dd hh:mm:ss.
+// FormatTime returns a Time object as a string in the yyyy-mm-dd hh:mm:ss format.
 func FormatTime(t time.Time) string {
 	return fmt.Sprintf(
 		"%04d-%02d-%02d %02d:%02d:%02d",
@@ -28,4 +28,9 @@ func QuoteStrings(strs []string) []string {
 		res = append(res, fmt.Sprintf("%q", s))
 	}
 	return res
+}
+
+// FormatDate returns a Time object as a string in the yyyy-mm-dd format.
+func FormatDate(t time.Time) string {
+	return fmt.Sprintf("%04d-%02d-%02d", t.Year(), t.Month(), t.Day())
 }

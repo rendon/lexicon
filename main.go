@@ -20,6 +20,9 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+const dateFormat = "2006-01-02"
+const dateTimeFormat = "2006-01-02 15:04:05"
+
 type WordStatus int
 
 const (
@@ -267,7 +270,7 @@ func defineBatch(lexicon *db.Lexicon) error {
 
 		// The word has a timestamp, we'll update the database timestamps
 		if len(tokens) == 2 {
-			timestamp, err := time.Parse("2006-01-02 15:04:05", tokens[1])
+			timestamp, err := time.Parse(dateTimeFormat, tokens[1])
 			if err != nil {
 				log.Printf("Unable to parse timestamp: %s", err)
 				return err
@@ -293,19 +296,41 @@ func defineBatch(lexicon *db.Lexicon) error {
 	return nil
 }
 
-func wod(_ *db.Lexicon) error {
-	now := time.Now()
-	date := fmt.Sprintf("%04d-%02d-%02d", now.Year(), now.Month(), now.Day())
-	if len(os.Args) >= 4 && os.Args[2] == "--date" && len(os.Args[3]) > 0 {
-		date = os.Args[3]
-	}
-
+func printWod(date string) error {
 	res, err := api.GetWod(date)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("%s %s\n", res.Date, res.Word)
+	return nil
+}
+
+func wod(_ *db.Lexicon) error {
+	// Default date range (today's date)
+	startDate := time.Now()
+	endDate := startDate
+
+	// Parse one or two dates
+	var dates []time.Time
+	for i := 2; i < 4 && i < len(os.Args); i++ {
+		d, err := time.Parse(dateFormat, os.Args[i])
+		if err != nil {
+			return err
+		}
+		dates = append(dates, d)
+	}
+
+	if len(dates) > 0 {
+		startDate = dates[0]
+		endDate = dates[len(dates)-1]
+	}
+
+	for d := startDate; d.Unix() <= endDate.Unix(); d = d.Add(time.Hour * 24) {
+		if err := printWod(util.FormatDate(d)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

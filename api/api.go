@@ -16,7 +16,10 @@ func getDictionaryApiKey() string {
 }
 
 var DefNotFound = errors.New("found no definitions")
-var WodNotFound = errors.New("word of the day not found")
+
+func wodNotFound(date string) error {
+	return fmt.Errorf("word of the day for '%s' not found", date)
+}
 
 func Define(name string) (*Lexeme, error) {
 	key := getDictionaryApiKey()
@@ -256,7 +259,7 @@ func GetWod(date string) (*Wod, error) {
 	defer res.Body.Close()
 
 	if res.StatusCode == http.StatusNotFound {
-		return nil, WodNotFound
+		return nil, wodNotFound(date)
 	}
 
 	buf, err := io.ReadAll(res.Body)
