@@ -77,6 +77,17 @@ func formatCognates(cognates []api.Cognate) string {
 	return res
 }
 
+func getPronunciations(headword api.Headword) string {
+	if len(headword.Pronunciations) == 0 {
+		return ""
+	}
+	var prons []string
+	for _, p := range headword.Pronunciations {
+		prons = append(prons, p.Text)
+	}
+	return fmt.Sprintf("    (%s)", strings.Join(prons, ","))
+}
+
 func printLexeme(lexeme *db.Lexeme, status WordStatus, printMode PrintMode) {
 	var out = new(strings.Builder)
 	_, _ = fmt.Fprintf(out, "\n")
@@ -88,7 +99,7 @@ func printLexeme(lexeme *db.Lexeme, status WordStatus, printMode PrintMode) {
 
 	_, _ = fmt.Fprintf(out, "%s", title.Sprintf("\n%s\n", strings.Repeat("=", len(lexeme.Name))))
 
-	_, _ = fmt.Fprintf(out, "Added on %s\n", util.FormatTime(lexeme.CreatedAt))
+	_, _ = fmt.Fprintf(out, "Added on %s\n", util.FormatDateTime(lexeme.CreatedAt))
 
 	var lex api.Lexeme
 	if err := json.Unmarshal([]byte(lexeme.Definition), &lex); err != nil {
@@ -102,7 +113,9 @@ func printLexeme(lexeme *db.Lexeme, status WordStatus, printMode PrintMode) {
 
 		gf := e.GrammaticalFunction
 		if len(gf) > 0 {
-			_, _ = fmt.Fprintf(out, "%s\n", subtitle.Sprintf("%s — %s", e.Headword.Text, gf))
+			hw := e.Headword.Text
+			prons := getPronunciations(e.Headword)
+			_, _ = fmt.Fprintf(out, "%s\n", subtitle.Sprintf("%s — %s%s", hw, gf, prons))
 
 			for _, sd := range e.ShortDefinitions {
 				_, _ = fmt.Fprintf(out, "• %s\n", sd)
