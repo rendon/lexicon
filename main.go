@@ -62,6 +62,18 @@ func defineName(lexicon *db.Lexicon, name string, waitTime time.Duration) error 
 	return nil
 }
 
+func formatCognates(cognates []api.Cognate) string {
+	var res string
+
+	for i, cognate := range cognates {
+		res += cognate.Label + " " + strings.Join(util.QuoteStrings(cognate.Targets), ",")
+		if i+1 < len(cognates) {
+			res += " | "
+		}
+	}
+	return res
+}
+
 func printLexeme(lexeme *db.Lexeme, status WordStatus, printMode PrintMode) {
 	var out = new(strings.Builder)
 	_, _ = fmt.Fprintf(out, "\n")
@@ -84,9 +96,17 @@ func printLexeme(lexeme *db.Lexeme, status WordStatus, printMode PrintMode) {
 	subtitle := color.New(color.FgBlue)
 	for i, e := range lex.Entries {
 		_, _ = fmt.Fprintf(out, "\n")
-		_, _ = fmt.Fprintf(out, "%s", subtitle.Sprintf("%s — %s\n", e.Headword.Text, e.GrammaticalFunction))
-		for _, sd := range e.ShortDefinitions {
-			_, _ = fmt.Fprintf(out, "• %s\n", sd)
+
+		gf := e.GrammaticalFunction
+		if len(gf) > 0 {
+			_, _ = fmt.Fprintf(out, "%s\n", subtitle.Sprintf("%s — %s", e.Headword.Text, gf))
+
+			for _, sd := range e.ShortDefinitions {
+				_, _ = fmt.Fprintf(out, "• %s\n", sd)
+			}
+		} else if len(e.Cognates) > 0 {
+			cognates := formatCognates(e.Cognates)
+			_, _ = fmt.Fprintf(out, "%s\n", subtitle.Sprintf("%s — %s", e.Headword.Text, cognates))
 		}
 		if printMode == FullDef {
 			for _, d := range e.Definitions {
@@ -120,9 +140,8 @@ func abridgeOutput(builder *strings.Builder) string {
 			// TODO: Make this value configurable.
 			if i > 25 {
 				break
-			} else {
-				continue
 			}
+			continue
 		}
 		_, _ = fmt.Fprintf(&out, "%s\n", line)
 	}

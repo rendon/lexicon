@@ -83,11 +83,29 @@ func parseEntry(entry DEntry) Entry {
 	return Entry{
 		Meta:                parseMeta(entry.Meta),
 		Headword:            parseHeadword(entry.Hwi),
+		Cognates:            parseCognates(entry.Cxs),
 		GrammaticalFunction: entry.Fl,
 		ShortDefinitions:    entry.Shortdef,
 		Definitions:         parseDefinitions(entry.Def),
 		Quotes:              parseQuotes(entry.Quotes),
 	}
+}
+
+func parseCognates(cxs []DCxs) []Cognate {
+	var cognates []Cognate
+	for _, ref := range cxs {
+		cognates = append(cognates, parseCognate(ref))
+	}
+	return cognates
+}
+
+func parseCognate(ref DCxs) Cognate {
+	var targets []string
+	for _, t := range ref.Cxtis {
+		targets = append(targets, t.Cxt)
+	}
+
+	return Cognate{Label: ref.Cxl, Targets: targets}
 }
 
 func parseMeta(meta DMeta) Meta {

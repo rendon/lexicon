@@ -43,9 +43,17 @@ type DHwi struct {
 	Prs []DPrs `json:"prs"`
 }
 
+type DCxs struct {
+	Cxl   string `json:"cxl"`
+	Cxtis []struct {
+		Cxt string `json:"cxt"`
+	} `json:"cxtis"`
+}
+
 type DEntry struct {
 	Meta     DMeta           `json:"meta"`
 	Hwi      DHwi            `json:"hwi"`
+	Cxs      []DCxs          `json:"cxs"`
 	Fl       string          `json:"fl"`
 	Def      []MDef          `json:"def"`
 	Quotes   []DQuote        `json:"quotes,omitempty"`
@@ -122,11 +130,20 @@ type Headword struct {
 	Pronunciations []Pronunciation `json:"pronunciations,omitempty"`
 }
 
+// Cognate when a headword is a less common spelling of another word with there
+// same meaning, there will be a cognate cross-reference pointing to the headwordwith
+// with the more common spelling.
+type Cognate struct {
+	Label   string   `json:"label"`
+	Targets []string `json:"targets"`
+}
+
 // Entry represents a meaning intended or conveyed.
 // See https://www.merriam-webster.com/dictionary/sense
 type Entry struct {
 	Meta                Meta         `json:"meta,omitempty"`
 	Headword            Headword     `json:"headword,omitempty"`
+	Cognates            []Cognate    `json:"cognates"`
 	GrammaticalFunction string       `json:"grammaticalFunction,omitempty"`
 	ShortDefinitions    []string     `json:"shortDefinitions,omitempty"`
 	Definitions         []Definition `json:"definitions,omitempty"`
