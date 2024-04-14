@@ -1,15 +1,20 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"lexicon/db"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 )
+
+var client *http.Client
 
 func getDictionaryApiKey() string {
 	return os.Getenv("DICTIONARY_API_KEY")
@@ -275,4 +280,50 @@ func GetWod(date string) (*Wod, error) {
 	}
 
 	return &wod, nil
+}
+
+// createRequest represents a request object for the POST /lexemes/ API.
+type createRequest struct {
+	Lexeme db.Lexeme `json:"lexeme"`
+}
+
+func getClient() *http.Client {
+	if client == nil {
+		client = &http.Client{Timeout: time.Second * 3}
+	}
+	return client
+}
+
+// Create calls the /lexemes API and creates a new lexeme.
+func Create(lexeme *db.Lexeme) error {
+	cr := createRequest{Lexeme: *lexeme}
+
+	buf, err := json.Marshal(cr)
+	if err != nil {
+		return err
+	}
+
+
+	apiKey := os.Getenv("API_KEY")
+
+	req, err := http.NewRequest("POST", "https://rafaelrendon.io/lexemes", bytes.NewReader(buf))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-KEY", apiKey)
+
+	resp, err := getClient().Do(req)
+
+	if resp.StatusCode != http.StatusCreated {
+		message := fmt.Sprintf("Service returned response %v status code", resp.StatusCode)
+		msg, err := io.ReadAll(resp.Body)
+		if err == nil {
+			message += fmt.Sprintf(" body: %s", msg)
+		}
+		return errors.New(message)
+	} else {
+		log.Printf("Successfully created %s", lexeme.Name)
+	}
+	return nil
 }

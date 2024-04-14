@@ -42,26 +42,30 @@ const (
 
 const entrySeparator = "---"
 
-func defineName(lexicon *db.Lexicon, name string, waitTime time.Duration) error {
-	res, err := lexicon.Find(name)
+func defineIfMissing(lexicon *db.Lexicon, name string) (bool, error) {
+	_, err := lexicon.Find(name)
 	if err != nil {
 		if errors.Is(err, db.NotFound) {
-			// Wait time so as not to overload the service and get throttled/blocked.
-			// TODO: Improve this hack for define-batch.
-			time.Sleep(waitTime)
-
-			res, err = saveDefinition(lexicon, name)
-			if err != nil {
-				return err
-			}
-			printLexeme(res, NewWord, ShortDef)
-			return nil
-		} else {
-			return err
+			_, err = saveDefinition(lexicon, name)
+			return true, err
 		}
+		return false, err
+	}
+	return false, nil
+}
+
+
+func defineName(lexicon *db.Lexicon, name string) error {
+	_, err := defineIfMissing(lexicon, name)
+	if err != nil {
+		return err
+	}
+
+	res, err := lexicon.Find(name)
+	if err != nil {
+		return err
 	}
 	printLexeme(res, SavedWord, ShortDef)
-
 	return nil
 }
 
@@ -246,7 +250,7 @@ func interactive(lexicon *db.Lexicon) {
 			continue
 		}
 
-		if err := defineName(lexicon, input, 0); err != nil {
+		if err := defineName(lexicon, input); err != nil {
 			log.Printf("Unable to define %q: %s", input, err)
 		}
 	}
@@ -274,11 +278,18 @@ func defineBatch(lexicon *db.Lexicon) error {
 		log.Printf("%q", line)
 		tokens := strings.Split(line, ",")
 		name := strings.ToLower(tokens[0])
-		waitTime := time.Millisecond * time.Duration(100+rand.Intn(2000))
-		if err := defineName(lexicon, name, waitTime); err != nil {
+		missing, err := defineIfMissing(lexicon, name)
+		if err != nil {
 			log.Printf("Define name for %q failed with error: %s", name, err)
 			failed = append(failed, line)
 			continue
+		}
+
+
+		if missing {
+			// Wait to avoid throttling.
+			waitTime := time.Millisecond * time.Duration(100+rand.Intn(2000))
+			time.Sleep(waitTime)
 		}
 
 		// The word has a timestamp, we'll update the database timestamps
@@ -347,6 +358,22 @@ func wod(_ *db.Lexicon) error {
 	return nil
 }
 
+func migrateToApi(lexicon *db.Lexicon) error {
+	lexemes, err := lexicon.All()
+	if err != nil {
+		return err
+	}
+
+	// register words with the API
+	for _, lex := range lexemes {
+		if err := api.Create(lex); err != nil {
+			log.Printf("Unable to create lexeme: %s", err)
+		}
+	}
+
+	return nil
+}
+
 func main() {
 	log.SetFlags(0)
 	log.SetOutput(os.Stdout)
@@ -371,6 +398,10 @@ func main() {
 	} else if command == "wod" {
 		if err := wod(lexicon); err != nil {
 			log.Fatalf("wod failed with error: %q", err)
+		}
+	} else if command == "migrate-to-api" {
+		if err := migrateToApi(lexicon); err != nil {
+			log.Fatalf("migrate-to-api failed with error: %s", err)
 		}
 	}
 }

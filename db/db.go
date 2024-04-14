@@ -12,11 +12,11 @@ import (
 var NotFound = errors.New("NOT FOUND")
 
 type Lexeme struct {
-	Name       string    `db:"name"`
-	Definition string    `db:"definition"`
-	Source     string    `db:"source"`
-	UpdatedAt  time.Time `db:"updatedAt"`
-	CreatedAt  time.Time `db:"createdAt"`
+	Name       string    `db:"name" json:"name"`
+	Definition string    `db:"definition" json:"definition"`
+	Source     string    `db:"source" json:"source"`
+	CreatedAt  time.Time `db:"createdAt" json:"created_at"`
+	UpdatedAt  time.Time `db:"updatedAt" json:"updated_at"`
 }
 
 type Lexicon struct {
@@ -136,4 +136,24 @@ func (d *Lexicon) UpdateTimestamps(lexeme Lexeme) error {
 	defer stmt.Close()
 	_, err = stmt.Exec(lexeme.CreatedAt.UnixMilli(), lexeme.UpdatedAt.UnixMilli(), lexeme.Name)
 	return err
+}
+
+func (d *Lexicon) All() ([]*Lexeme, error) {
+	rows, err := d.db.Query("SELECT * FROM lexicon")
+	if err != nil {
+		log.Printf("Unable to query lexicon table: %s", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var all []*Lexeme
+	for rows.Next() {
+		lexeme, err := readRecord(rows)
+		if err != nil {
+			log.Printf("Unable to read record: %s", err)
+			continue
+		}
+		all = append(all, lexeme)
+	}
+	return all, nil
 }
