@@ -1,20 +1,106 @@
-package api
+// dictapi implements an client for dictionaryapi.com.
+package dictapi
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"lexicon/db"
+	"lexicon/types"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
-	"time"
 )
 
-var client *http.Client
+// GetDefinitionResult is a struct representation of the data returned by dictionaryapi.com.
+// Generated with https://transform.tools/json-to-go using the JSON response from
+// https://dictionaryapi.com/api/v3/references/collegiate/json/accept?key={key}
+// JSON documentation: https://dictionaryapi.com/products/json
+
+type DMeta struct {
+	ID        string   `json:"id"`
+	UUID      string   `json:"uuid"`
+	Sort      string   `json:"sort"`
+	Src       string   `json:"src"`
+	Section   string   `json:"section"`
+	Stems     []string `json:"stems"`
+	Offensive bool     `json:"offensive"`
+}
+
+type MDef struct {
+	Vd   string            `json:"vd"`
+	Sseq [][][]interface{} `json:"sseq"`
+}
+
+type DQuote struct {
+	T  string `json:"t"`
+	Aq struct {
+		Auth   string `json:"auth"`
+		Source string `json:"source"`
+		Aqdate string `json:"aqdate"`
+	} `json:"aq"`
+}
+type DPrs struct {
+	Mw    string `json:"mw"`
+	Sound struct {
+		Audio string `json:"audio"`
+		Ref   string `json:"ref"`
+		Stat  string `json:"stat"`
+	} `json:"sound,omitempty"`
+	L string `json:"l,omitempty"`
+}
+
+type DHwi struct {
+	Hw  string `json:"hw"`
+	Prs []DPrs `json:"prs"`
+}
+
+type DCxs struct {
+	Cxl   string `json:"cxl"`
+	Cxtis []struct {
+		Cxt string `json:"cxt"`
+	} `json:"cxtis"`
+}
+
+type DEntry struct {
+	Meta     DMeta           `json:"meta"`
+	Hwi      DHwi            `json:"hwi"`
+	Cxs      []DCxs          `json:"cxs"`
+	Fl       string          `json:"fl"`
+	Def      []MDef          `json:"def"`
+	Quotes   []DQuote        `json:"quotes,omitempty"`
+	Et       [][]interface{} `json:"et,omitempty"`
+	Date     string          `json:"date,omitempty"`
+	Shortdef []string        `json:"shortdef"`
+	Ins      []struct {
+		If string `json:"if"`
+	} `json:"ins,omitempty"`
+	Uros []struct {
+		Ure string `json:"ure"`
+		Prs []struct {
+			Mw    string `json:"mw"`
+			Sound struct {
+				Audio string `json:"audio"`
+				Ref   string `json:"ref"`
+				Stat  string `json:"stat"`
+			} `json:"sound"`
+		} `json:"prs"`
+		Fl string `json:"fl"`
+	} `json:"uros,omitempty"`
+	Dros []struct {
+		Drp string `json:"drp"`
+		Vrs []struct {
+			Vl string `json:"vl"`
+			Va string `json:"va"`
+		} `json:"vrs"`
+		Def []struct {
+			Sseq [][][]interface{} `json:"sseq"`
+		} `json:"def"`
+	} `json:"dros,omitempty"`
+}
+
+type GetDefinitionResult []DEntry
 
 func getDictionaryApiKey() string {
 	return os.Getenv("DICTIONARY_API_KEY")
@@ -26,7 +112,7 @@ func wodNotFound(date string) error {
 	return fmt.Errorf("word of the day for '%s' not found", date)
 }
 
-func Define(name string) (*Lexeme, error) {
+func Define(name string) (*types.Definition, error) {
 	key := getDictionaryApiKey()
 	if len(key) == 0 {
 		return nil, errors.New("missing API key")
@@ -44,17 +130,17 @@ func Define(name string) (*Lexeme, error) {
 	}
 	defer res.Body.Close()
 
-	buf, err := io.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
 
 	if res.StatusCode != http.StatusOK {
-		log.Printf("Got non-OK response %s: %s", res.Status, string(buf))
-		return nil, fmt.Errorf("service returned %s", res.Status)
+		log.Printf("Got %s: %s", res.Status, body)
+		return nil, fmt.Errorf("service returned %s: %s", res.Status, body)
 	}
 
-	ss := parseSpellingSuggestions(buf)
+	ss := parseSpellingSuggestions(body)
 	if len(ss) > 0 {
 		message := "The word you've entered isn't in the dictionary. Spelling suggestions:\n"
 		for _, e := range ss {
@@ -64,17 +150,17 @@ func Define(name string) (*Lexeme, error) {
 	}
 
 	var data GetDefinitionResult
-	if err := json.Unmarshal(buf, &data); err != nil {
+	if err := json.Unmarshal(body, &data); err != nil {
 		return nil, err
 	}
 	if len(data) < 1 {
 		return nil, DefNotFound
 	}
-	var lexeme Lexeme
+	var definition types.Definition
 	for _, entry := range data {
-		lexeme.Entries = append(lexeme.Entries, parseEntry(entry))
+		definition.Entries = append(definition.Entries, parseEntry(entry))
 	}
-	return &lexeme, nil
+	return &definition, nil
 }
 
 // parseSpellingSuggestions tries to parse spelling suggestions, which is an array of strings. If
@@ -87,37 +173,37 @@ func parseSpellingSuggestions(buf []byte) []string {
 	return suggestions
 }
 
-func parseEntry(entry DEntry) Entry {
-	return Entry{
+func parseEntry(entry DEntry) types.Entry {
+	return types.Entry{
 		Meta:                parseMeta(entry.Meta),
 		Headword:            parseHeadword(entry.Hwi),
 		Cognates:            parseCognates(entry.Cxs),
 		GrammaticalFunction: entry.Fl,
 		ShortDefinitions:    entry.Shortdef,
-		Definitions:         parseDefinitions(entry.Def),
+		Defs:                parseDefinitions(entry.Def),
 		Quotes:              parseQuotes(entry.Quotes),
 	}
 }
 
-func parseCognates(cxs []DCxs) []Cognate {
-	var cognates []Cognate
+func parseCognates(cxs []DCxs) []types.Cognate {
+	var cognates []types.Cognate
 	for _, ref := range cxs {
 		cognates = append(cognates, parseCognate(ref))
 	}
 	return cognates
 }
 
-func parseCognate(ref DCxs) Cognate {
+func parseCognate(ref DCxs) types.Cognate {
 	var targets []string
 	for _, t := range ref.Cxtis {
 		targets = append(targets, t.Cxt)
 	}
 
-	return Cognate{Label: ref.Cxl, Targets: targets}
+	return types.Cognate{Label: ref.Cxl, Targets: targets}
 }
 
-func parseMeta(meta DMeta) Meta {
-	return Meta{
+func parseMeta(meta DMeta) types.Meta {
+	return types.Meta{
 		ID:        meta.ID,
 		UUID:      meta.UUID,
 		Sort:      meta.Sort,
@@ -128,17 +214,17 @@ func parseMeta(meta DMeta) Meta {
 	}
 }
 
-func parseHeadword(hwi DHwi) Headword {
-	return Headword{
+func parseHeadword(hwi DHwi) types.Headword {
+	return types.Headword{
 		Text:           hwi.Hw,
 		Pronunciations: parsePronunciations(hwi.Prs),
 	}
 }
 
-func parsePronunciations(prs []DPrs) []Pronunciation {
-	var res []Pronunciation
+func parsePronunciations(prs []DPrs) []types.Pronunciation {
+	var res []types.Pronunciation
 	for _, p := range prs {
-		res = append(res, Pronunciation{
+		res = append(res, types.Pronunciation{
 			Text:  p.Mw,
 			Sound: p.Sound.Audio,
 		})
@@ -146,8 +232,8 @@ func parsePronunciations(prs []DPrs) []Pronunciation {
 	return res
 }
 
-func parseDefinitions(defs []MDef) []Definition {
-	var res []Definition
+func parseDefinitions(defs []MDef) []types.Def {
+	var res []types.Def
 	for _, def := range defs {
 		res = append(res, parseDefinition(def))
 	}
@@ -155,21 +241,21 @@ func parseDefinitions(defs []MDef) []Definition {
 }
 
 // parseDefinition parses definitions.
-func parseDefinition(def MDef) Definition {
-	return Definition{
+func parseDefinition(def MDef) types.Def {
+	return types.Def{
 		VerbDivider: def.Vd,
 		Senses:      parseSenses(def.Sseq),
 	}
 }
 
 // Ref: https://dictionaryapi.com/products/json#sec-2.dt
-func parseSenses(sseq [][][]interface{}) []Sense {
-	var senses []Sense
+func parseSenses(sseq [][][]interface{}) []types.Sense {
+	var senses []types.Sense
 	for _, a := range sseq {
 		for _, b := range a {
 			for _, c := range b {
 				if _, ok := c.(map[string]interface{}); ok {
-					var sense Sense
+					var sense types.Sense
 					if s, isMap := c.(map[string]interface{}); isMap {
 						if s["dt"] == nil {
 							continue
@@ -241,10 +327,10 @@ func parseVerbalIllustrations(dt []interface{}) []string {
 	return res
 }
 
-func parseQuotes(quotes []DQuote) []Quote {
-	var res []Quote
+func parseQuotes(quotes []DQuote) []types.Quote {
+	var res []types.Quote
 	for _, q := range quotes {
-		res = append(res, Quote{
+		res = append(res, types.Quote{
 			Text:            q.T,
 			Author:          q.Aq.Auth,
 			Source:          q.Aq.Source,
@@ -252,78 +338,4 @@ func parseQuotes(quotes []DQuote) []Quote {
 		})
 	}
 	return res
-}
-
-func GetWod(date string) (*Wod, error) {
-	u := fmt.Sprintf("http://localhost:8000/wod/%s", url.PathEscape(date))
-	res, err := http.Get(u)
-	if err != nil {
-		log.Printf("HTTP call to %s failed with error: %s", u, err)
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode == http.StatusNotFound {
-		return nil, wodNotFound(date)
-	}
-
-	buf, err := io.ReadAll(res.Body)
-	if err != nil {
-		log.Printf("Unable to read response's body: %s", err)
-		return nil, err
-	}
-
-	var wod Wod
-	if err := json.Unmarshal(buf, &wod); err != nil {
-		log.Printf("Unable to unmarshal response's body: %s", err)
-		return nil, err
-	}
-
-	return &wod, nil
-}
-
-// createRequest represents a request object for the POST /lexemes/ API.
-type createRequest struct {
-	Lexeme db.Lexeme `json:"lexeme"`
-}
-
-func getClient() *http.Client {
-	if client == nil {
-		client = &http.Client{Timeout: time.Second * 3}
-	}
-	return client
-}
-
-// Create calls the /lexemes API and creates a new lexeme.
-func Create(lexeme *db.Lexeme) error {
-	cr := createRequest{Lexeme: *lexeme}
-
-	buf, err := json.Marshal(cr)
-	if err != nil {
-		return err
-	}
-
-
-	apiKey := os.Getenv("API_KEY")
-
-	req, err := http.NewRequest("POST", "https://rafaelrendon.io/lexemes", bytes.NewReader(buf))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-KEY", apiKey)
-
-	resp, err := getClient().Do(req)
-
-	if resp.StatusCode != http.StatusCreated {
-		message := fmt.Sprintf("Service returned response %v status code", resp.StatusCode)
-		msg, err := io.ReadAll(resp.Body)
-		if err == nil {
-			message += fmt.Sprintf(" body: %s", msg)
-		}
-		return errors.New(message)
-	} else {
-		log.Printf("Successfully created %s", lexeme.Name)
-	}
-	return nil
 }

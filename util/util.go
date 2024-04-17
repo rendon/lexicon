@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -14,7 +15,10 @@ func Min(a, b int) int {
 }
 
 // FormatDateTime returns a Time object as a string in the yyyy-mm-dd hh:mm:ss format.
-func FormatDateTime(t time.Time) string {
+func FormatDateTime(t *time.Time) string {
+	if t == nil {
+		return "nil"
+	}
 	return fmt.Sprintf(
 		"%04d-%02d-%02d %02d:%02d:%02d",
 		t.Year(), t.Month(), t.Day(),
@@ -33,4 +37,13 @@ func QuoteStrings(strs []string) []string {
 // FormatDate returns a Time object as a string in the yyyy-mm-dd format.
 func FormatDate(t time.Time) string {
 	return fmt.Sprintf("%04d-%02d-%02d", t.Year(), t.Month(), t.Day())
+}
+
+// Serialize converts interface object to a JSON document.
+func Serialize(i interface{}) ([]byte, error) {
+	doc, err := json.Marshal(i)
+	if err != nil {
+		return nil, err
+	}
+	return doc, nil
 }

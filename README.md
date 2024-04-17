@@ -1,4 +1,14 @@
-# Lexicon
+# Status
+The build is broken, and re-designing the program.
+What's changing:
+1. We'll have two places where to store the data
+  a. A sqlite database for local usage only
+  b. An API for distributed usage (i.e., can be used from multiple computers)
+2. I've defined a Dictionary interface with the functions that each dictionary type (sqlite, api, etc.) must implement
+3. The source of the definitions will continue to be dictionaryapi.com and it will be queried by this program
+1. The WOD will come from a separate source (the wod service), not part of the dictionary API
+
+-- # Lexicon
 A command line lexicon (dictionary).
 
 ## Prerequisites

@@ -6,11 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"lexicon/api"
-	"lexicon/db"
+	"lexicon/dictapi"
+	"lexicon/lexapi"
+	"lexicon/lexdb"
+	"lexicon/types"
 	"lexicon/util"
 	"log"
 	"math/rand"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -23,11 +27,9 @@ import (
 const dateFormat = "2006-01-02"
 const dateTimeFormat = "2006-01-02 15:04:05"
 
-type WordStatus int
-
 const (
-	NewWord WordStatus = iota
-	SavedWord
+	newEntry      = 1
+	existingEntry = 2
 )
 const (
 	DictionaryApi = "dictionaryapi.com"
@@ -42,34 +44,52 @@ const (
 
 const entrySeparator = "---"
 
-func defineIfMissing(lexicon *db.Lexicon, name string) (bool, error) {
-	_, err := lexicon.Find(name)
+func getDefinition(name string, dictionary types.Dictionary) (*types.Lexeme, int, error) {
+	res, err := dictionary.Find(name)
 	if err != nil {
-		if errors.Is(err, db.NotFound) {
-			_, err = saveDefinition(lexicon, name)
-			return true, err
+		if !errors.Is(err, types.NotFound) {
+			return nil, 0, err
 		}
-		return false, err
+
+		def, err := dictapi.Define(name)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		defstr, err := util.Serialize(def)
+		if err != nil {
+			log.Printf("Unable to serialize %v: %s", def, err)
+			return nil, 0, err
+		}
+		lex := types.Lexeme{
+			Name:       name,
+			Definition: string(defstr),
+			Source:     DictionaryApi,
+		}
+
+		return &lex, newEntry, err
 	}
-	return false, nil
+	return res, existingEntry, nil
 }
 
-
-func defineName(lexicon *db.Lexicon, name string) error {
-	_, err := defineIfMissing(lexicon, name)
+func defineName(name string, dictionary types.Dictionary) error {
+	def, status, err := getDefinition(name, dictionary)
 	if err != nil {
 		return err
 	}
 
-	res, err := lexicon.Find(name)
-	if err != nil {
-		return err
+	if status == newEntry {
+		if err := dictionary.Save(def); err != nil {
+			log.Printf("Unable to save %v: %s", def, err)
+			return err
+		}
 	}
-	printLexeme(res, SavedWord, ShortDef)
+
+	printLexeme(def, status, ShortDef)
 	return nil
 }
 
-func formatCognates(cognates []api.Cognate) string {
+func formatCognates(cognates []types.Cognate) string {
 	var res string
 
 	for i, cognate := range cognates {
@@ -81,7 +101,7 @@ func formatCognates(cognates []api.Cognate) string {
 	return res
 }
 
-func getPronunciations(headword api.Headword) string {
+func getPronunciations(headword types.Headword) string {
 	if len(headword.Pronunciations) == 0 {
 		return ""
 	}
@@ -92,10 +112,10 @@ func getPronunciations(headword api.Headword) string {
 	return fmt.Sprintf("    (%s)", strings.Join(prons, ","))
 }
 
-func printLexeme(lexeme *db.Lexeme, status WordStatus, printMode PrintMode) {
+func printLexeme(lexeme *types.Lexeme, nameStatus int, printMode PrintMode) {
 	var out = new(strings.Builder)
 	_, _ = fmt.Fprintf(out, "\n")
-	label := labelName(status)
+	label := labelName(nameStatus)
 
 	title := color.New(color.FgGreen, color.Bold)
 	_, _ = fmt.Fprintf(out, "%s", title.Sprintf("\n%s", lexeme.Name))
@@ -105,9 +125,9 @@ func printLexeme(lexeme *db.Lexeme, status WordStatus, printMode PrintMode) {
 
 	_, _ = fmt.Fprintf(out, "Added on %s\n", util.FormatDateTime(lexeme.CreatedAt))
 
-	var lex api.Lexeme
+	var lex types.Definition
 	if err := json.Unmarshal([]byte(lexeme.Definition), &lex); err != nil {
-		log.Printf("Unable to parse definition: %s", err)
+		log.Printf("Unable to parse definition: %s -> %s", err, lexeme.Definition)
 		return
 	}
 
@@ -129,7 +149,7 @@ func printLexeme(lexeme *db.Lexeme, status WordStatus, printMode PrintMode) {
 			_, _ = fmt.Fprintf(out, "%s\n", subtitle.Sprintf("%s — %s", e.Headword.Text, cognates))
 		}
 		if printMode == FullDef {
-			for _, d := range e.Definitions {
+			for _, d := range e.Defs {
 				printDefinition(out, d)
 			}
 
@@ -168,7 +188,7 @@ func abridgeOutput(builder *strings.Builder) string {
 	return out.String()
 }
 
-func printDefinition(out *strings.Builder, d api.Definition) {
+func printDefinition(out *strings.Builder, d types.Def) {
 	_, _ = fmt.Fprintf(out, "\n")
 	if len(d.VerbDivider) > 0 {
 		_, _ = fmt.Fprintf(out, "%s\n", d.VerbDivider)
@@ -190,44 +210,20 @@ func printDefinition(out *strings.Builder, d api.Definition) {
 	}
 }
 
-func printQuote(out *strings.Builder, q api.Quote) {
+func printQuote(out *strings.Builder, q types.Quote) {
 	_, _ = fmt.Fprintf(out, "  %q\n", q.Text)
 	_, _ = fmt.Fprintf(out, "  %s, %s, %s\n\n", q.Source, q.Author, q.PublicationDate)
 }
 
-func labelName(status WordStatus) string {
-	if status == NewWord {
+func labelName(nameStatus int) string {
+	if nameStatus == newEntry {
 		return "\tNew"
 	}
 	return ""
 }
 
-func saveDefinition(lexicon *db.Lexicon, name string) (*db.Lexeme, error) {
-	def, err := api.Define(name)
-	if err != nil {
-		return nil, err
-	}
-
-	out, err := json.Marshal(def)
-	if err != nil {
-		log.Printf("Unable to serialize lexeme: %s", err)
-		return nil, err
-	}
-
-	lexeme := &db.Lexeme{
-		Name:       name,
-		Definition: string(out),
-		Source:     DictionaryApi,
-		CreatedAt:  time.Now(),
-	}
-	if err := lexicon.Save(lexeme); err != nil {
-		return nil, fmt.Errorf("unable to save %q: %s: ", name, err)
-	}
-	return lexeme, nil
-}
-
 // interactive launches an interactive session where the user can define as many words as needed.
-func interactive(lexicon *db.Lexicon) {
+func interactive(dictionary types.Dictionary) {
 	scanner := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Printf("\n> ")
@@ -250,7 +246,7 @@ func interactive(lexicon *db.Lexicon) {
 			continue
 		}
 
-		if err := defineName(lexicon, input); err != nil {
+		if err := defineName(input, dictionary); err != nil {
 			log.Printf("Unable to define %q: %s", input, err)
 		}
 	}
@@ -259,7 +255,7 @@ func interactive(lexicon *db.Lexicon) {
 // defineBatch reads words from a file and defines all words in it. If the words contain a timestamp
 // the createdAt and updatedAt timestamps are set to such timestamp. This command is useful for
 // importing words from other sources while still keeping the original dates.
-func defineBatch(lexicon *db.Lexicon) error {
+func defineBatch(dictionary types.Dictionary) error {
 	if len(os.Args) < 3 {
 		return errors.New("missing file name")
 	}
@@ -275,39 +271,36 @@ func defineBatch(lexicon *db.Lexicon) error {
 	var failed []string
 	lines := strings.Split(strings.TrimSpace(string(buf)), "\n")
 	for _, line := range lines {
-		log.Printf("%q", line)
 		tokens := strings.Split(line, ",")
 		name := strings.ToLower(tokens[0])
-		missing, err := defineIfMissing(lexicon, name)
+		def, nameStatus, err := getDefinition(name, dictionary)
 		if err != nil {
-			log.Printf("Define name for %q failed with error: %s", name, err)
+			log.Printf("Unable to define %q: %s", name, err)
 			failed = append(failed, line)
 			continue
 		}
 
-
-		if missing {
-			// Wait to avoid throttling.
-			waitTime := time.Millisecond * time.Duration(100+rand.Intn(2000))
-			time.Sleep(waitTime)
-		}
-
-		// The word has a timestamp, we'll update the database timestamps
+		// The word comes with a timestamp, we'll update the timestamps accordingly.
 		if len(tokens) == 2 {
 			timestamp, err := time.Parse(dateTimeFormat, tokens[1])
 			if err != nil {
 				log.Printf("Unable to parse timestamp: %s", err)
 				return err
 			}
+			def.UpdatedAt = &timestamp
+			def.CreatedAt = &timestamp
+		}
 
-			var lexeme = db.Lexeme{
-				Name:      name,
-				UpdatedAt: timestamp,
-				CreatedAt: timestamp,
-			}
-			if err := lexicon.UpdateTimestamps(lexeme); err != nil {
-				log.Printf("Unable to update %s's timestamps: %s", name, err)
-			}
+		if err := dictionary.Save(def); err != nil {
+			log.Printf("Unable to save %q: %s", name, err)
+			failed = append(failed, line)
+			continue
+		}
+
+		if nameStatus == newEntry {
+			// Wait to avoid throttling.
+			waitTime := time.Millisecond * time.Duration(100+rand.Intn(2000))
+			time.Sleep(waitTime)
 		}
 	}
 
@@ -320,8 +313,36 @@ func defineBatch(lexicon *db.Lexicon) error {
 	return nil
 }
 
+func getWod(date string) (*types.Wod, error) {
+	u := fmt.Sprintf("http://localhost:8000/wod/%s", url.PathEscape(date))
+	res, err := http.Get(u)
+	if err != nil {
+		log.Printf("HTTP call to %s failed with error: %s", u, err)
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("word of the day for '%s' not found", date)
+	}
+
+	buf, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Printf("Unable to read response's body: %s", err)
+		return nil, err
+	}
+
+	var wod types.Wod
+	if err := json.Unmarshal(buf, &wod); err != nil {
+		log.Printf("Unable to unmarshal response's body: %s", err)
+		return nil, err
+	}
+
+	return &wod, nil
+}
+
 func printWod(date string) error {
-	res, err := api.GetWod(date)
+	res, err := getWod(date)
 	if err != nil {
 		return err
 	}
@@ -330,7 +351,7 @@ func printWod(date string) error {
 	return nil
 }
 
-func wod(_ *db.Lexicon) error {
+func wod() error {
 	// Default date range (today's date)
 	startDate := time.Now()
 	endDate := startDate
@@ -358,29 +379,25 @@ func wod(_ *db.Lexicon) error {
 	return nil
 }
 
-func migrateToApi(lexicon *db.Lexicon) error {
-	lexemes, err := lexicon.All()
-	if err != nil {
-		return err
-	}
-
-	// register words with the API
-	for _, lex := range lexemes {
-		if err := api.Create(lex); err != nil {
-			log.Printf("Unable to create lexeme: %s", err)
-		}
-	}
-
-	return nil
-}
-
 func main() {
 	log.SetFlags(0)
 	log.SetOutput(os.Stdout)
 
-	lexicon, err := db.NewLexicon()
-	if err != nil {
-		log.Fatalf("Failed to set up database: %s", err)
+	var lexicon types.Dictionary
+
+	// TODO: read config from toml file.
+	if os.Getenv("DATA_SOURCE_TYPE") == "API" {
+		ac, err := lexapi.NewDictionary()
+		if err != nil {
+			log.Fatalf("Failed to set up API client: %s", err)
+		}
+		lexicon = ac
+	} else {
+		d, err := lexdb.NewDictionary()
+		if err != nil {
+			log.Fatalf("Failed to set up database: %s", err)
+		}
+		lexicon = d
 	}
 	defer lexicon.Close()
 
@@ -396,12 +413,8 @@ func main() {
 			log.Fatalf("define-batch failed with error: %q", err)
 		}
 	} else if command == "wod" {
-		if err := wod(lexicon); err != nil {
+		if err := wod(); err != nil {
 			log.Fatalf("wod failed with error: %q", err)
-		}
-	} else if command == "migrate-to-api" {
-		if err := migrateToApi(lexicon); err != nil {
-			log.Fatalf("migrate-to-api failed with error: %s", err)
 		}
 	}
 }
