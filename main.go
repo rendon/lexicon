@@ -314,7 +314,7 @@ func defineBatch(dictionary types.Dictionary) error {
 }
 
 func getWod(date string) (*types.Wod, error) {
-	u := fmt.Sprintf("http://localhost:8000/wod/%s", url.PathEscape(date))
+	u := fmt.Sprintf("https://rafaelrendon.io/wod/%s", url.PathEscape(date))
 	res, err := http.Get(u)
 	if err != nil {
 		log.Printf("HTTP call to %s failed with error: %s", u, err)
@@ -383,7 +383,7 @@ func main() {
 	log.SetFlags(0)
 	log.SetOutput(os.Stdout)
 
-	var lexicon types.Dictionary
+	var dictionary types.Dictionary
 
 	// TODO: read config from toml file.
 	if os.Getenv("DATA_SOURCE_TYPE") == "API" {
@@ -391,25 +391,25 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to set up API client: %s", err)
 		}
-		lexicon = ac
+		dictionary = ac
 	} else {
 		d, err := lexdb.NewDictionary()
 		if err != nil {
 			log.Fatalf("Failed to set up database: %s", err)
 		}
-		lexicon = d
+		dictionary = d
 	}
-	defer lexicon.Close()
+	defer dictionary.Close()
 
 	if len(os.Args) <= 1 {
 		// Launch the lexicon in interactive mode
-		interactive(lexicon)
+		interactive(dictionary)
 		return
 	}
 
 	command := os.Args[1]
 	if command == "define-batch" {
-		if err := defineBatch(lexicon); err != nil {
+		if err := defineBatch(dictionary); err != nil {
 			log.Fatalf("define-batch failed with error: %q", err)
 		}
 	} else if command == "wod" {
