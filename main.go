@@ -314,7 +314,7 @@ func defineBatch(dictionary types.Dictionary) error {
 }
 
 func getWod(date string) (*types.Wod, error) {
-	u := fmt.Sprintf("http://localhost:8000/wod/%s", url.PathEscape(date))
+	u := fmt.Sprintf("https://rafaelrendon.io/wod/%s", url.PathEscape(date))
 	res, err := http.Get(u)
 	if err != nil {
 		log.Printf("HTTP call to %s failed with error: %s", u, err)
