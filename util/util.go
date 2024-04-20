@@ -3,7 +3,6 @@ package util
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 )
 
 // Min returns the minimum of two integers.
@@ -14,17 +13,6 @@ func Min(a, b int) int {
 	return b
 }
 
-// FormatDateTime returns a Time object as a string in the yyyy-mm-dd hh:mm:ss format.
-func FormatDateTime(t *time.Time) string {
-	if t == nil {
-		return "nil"
-	}
-	return fmt.Sprintf(
-		"%04d-%02d-%02d %02d:%02d:%02d",
-		t.Year(), t.Month(), t.Day(),
-		t.Hour(), t.Minute(), t.Second())
-}
-
 // QuoteStrings wraps in string with double quotes and returns the result.
 func QuoteStrings(strs []string) []string {
 	var res []string
@@ -32,11 +20,6 @@ func QuoteStrings(strs []string) []string {
 		res = append(res, fmt.Sprintf("%q", s))
 	}
 	return res
-}
-
-// FormatDate returns a Time object as a string in the yyyy-mm-dd format.
-func FormatDate(t time.Time) string {
-	return fmt.Sprintf("%04d-%02d-%02d", t.Year(), t.Month(), t.Day())
 }
 
 // Serialize converts interface object to a JSON document.

@@ -112,6 +112,16 @@ func getPronunciations(headword types.Headword) string {
 	return fmt.Sprintf("    (%s)", strings.Join(prons, ","))
 }
 
+func formatLocalDateTime(t *time.Time) string {
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		log.Printf("Unable to load location: %s", err)
+		return t.Format(time.DateTime)
+	}
+	return t.In(loc).Format(time.DateTime)
+
+}
+
 func printLexeme(lexeme *types.Lexeme, nameStatus int, printMode PrintMode) {
 	var out = new(strings.Builder)
 	_, _ = fmt.Fprintf(out, "\n")
@@ -123,7 +133,7 @@ func printLexeme(lexeme *types.Lexeme, nameStatus int, printMode PrintMode) {
 
 	_, _ = fmt.Fprintf(out, "%s", title.Sprintf("\n%s\n", strings.Repeat("=", len(lexeme.Name))))
 
-	_, _ = fmt.Fprintf(out, "Added on %s\n", util.FormatDateTime(lexeme.CreatedAt))
+	_, _ = fmt.Fprintf(out, "Added on %s\n", formatLocalDateTime(lexeme.CreatedAt))
 
 	var lex types.Definition
 	if err := json.Unmarshal([]byte(lexeme.Definition), &lex); err != nil {
@@ -372,7 +382,7 @@ func wod() error {
 	}
 
 	for d := startDate; d.Unix() <= endDate.Unix(); d = d.Add(time.Hour * 24) {
-		if err := printWod(util.FormatDate(d)); err != nil {
+		if err := printWod(d.Format(time.DateOnly)); err != nil {
 			return err
 		}
 	}
