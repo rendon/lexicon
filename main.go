@@ -124,7 +124,6 @@ func formatLocalDateTime(t *time.Time) string {
 
 func printLexeme(lexeme *types.Lexeme, nameStatus int, printMode PrintMode) {
 	var out = new(strings.Builder)
-	_, _ = fmt.Fprintf(out, "\n")
 	label := labelName(nameStatus)
 
 	title := color.New(color.FgGreen, color.Bold)
@@ -260,6 +259,13 @@ func interactive(dictionary types.Dictionary) {
 			log.Printf("Unable to define %q: %s", input, err)
 		}
 	}
+}
+
+func define(dictionary types.Dictionary) error {
+	if len(os.Args) < 3 {
+		return errors.New("you must provide a name")
+	}
+	return defineName(os.Args[2], dictionary)
 }
 
 // defineBatch reads words from a file and defines all words in it. If the words contain a timestamp
@@ -418,7 +424,11 @@ func main() {
 	}
 
 	command := os.Args[1]
-	if command == "define-batch" {
+	if command == "define" {
+		if err := define(dictionary); err != nil {
+			log.Fatalf("define failed with error: %q", err)
+		}
+	} else if command == "define-batch" {
 		if err := defineBatch(dictionary); err != nil {
 			log.Fatalf("define-batch failed with error: %q", err)
 		}

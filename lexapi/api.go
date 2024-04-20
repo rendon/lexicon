@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const baseURL = "https://rafaelrendon.io/"
+const baseURL = "https://rafaelrendon.io"
 
 var client *http.Client
 
@@ -100,7 +100,8 @@ func (a *APIDictionary) Save(lexeme *types.Lexeme) error {
 }
 
 func (a *APIDictionary) post(payload []byte) (*http.Response, error) {
-	req, err := http.NewRequest("POST", "https://rafaelrendon.io/lexemes", bytes.NewReader(payload))
+	u := fmt.Sprintf("%s/lexemes/", baseURL)
+	req, err := http.NewRequest("POST", u, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
 	}
