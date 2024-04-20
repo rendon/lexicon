@@ -32,7 +32,7 @@ func NewDictionary() (*APIDictionary, error) {
 		return nil, errors.New("API_KEY is missing")
 	}
 	return &APIDictionary{
-		httpc:  &http.Client{Timeout: time.Second * 3},
+		httpc:  &http.Client{Timeout: time.Second * 10},
 		apiKey: apiKey,
 	}, nil
 }
@@ -87,6 +87,10 @@ func (a *APIDictionary) Save(lexeme *types.Lexeme) error {
 	}
 
 	resp, err := a.post(payload)
+	if err != nil {
+		log.Printf("POST request for %s failed: %s", lexeme.Name, err)
+		return err
+	}
 
 	if resp.StatusCode != http.StatusCreated {
 		message := fmt.Sprintf("Service returned response %v status code", resp.StatusCode)

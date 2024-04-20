@@ -27,6 +27,19 @@ func NewDictionary() (types.Dictionary, error) {
 	return &Lexicon{db: db}, nil
 }
 
+
+func NewLexicon() (*Lexicon, error) {
+	sourceName := os.Getenv("DATA_SOURCE_NAME")
+	if len(sourceName) == 0 {
+		return nil, errors.New("missing data source name")
+	}
+	db, err := sql.Open("sqlite3", sourceName)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create database: %s", err)
+	}
+	return &Lexicon{db: db}, nil
+}
+
 // Find finds and returns a name in the database or returns error if the name
 // does not exist in the database.
 func (d *Lexicon) Find(name string) (*types.Lexeme, error) {

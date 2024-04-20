@@ -379,11 +379,27 @@ func wod() error {
 	return nil
 }
 
+func migrateToApi(lexicon *lexdb.Lexicon, dictionary types.Dictionary) error {
+	lexemes, err := lexicon.All()
+	if err != nil {
+		return err
+	}
+
+	// register words with the API
+	for _, lex := range lexemes {
+		if err := dictionary.Save(lex); err != nil {
+			log.Printf("Unable to create lexeme: %s", err)
+		}
+	}
+
+	return nil
+}
+
 func main() {
 	log.SetFlags(0)
 	log.SetOutput(os.Stdout)
 
-	var lexicon types.Dictionary
+	var dictionary types.Dictionary
 
 	// TODO: read config from toml file.
 	if os.Getenv("DATA_SOURCE_TYPE") == "API" {
@@ -391,30 +407,38 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to set up API client: %s", err)
 		}
-		lexicon = ac
+		dictionary = ac
 	} else {
 		d, err := lexdb.NewDictionary()
 		if err != nil {
 			log.Fatalf("Failed to set up database: %s", err)
 		}
-		lexicon = d
+		dictionary = d
 	}
-	defer lexicon.Close()
+	defer dictionary.Close()
 
 	if len(os.Args) <= 1 {
 		// Launch the lexicon in interactive mode
-		interactive(lexicon)
+		interactive(dictionary)
 		return
 	}
 
 	command := os.Args[1]
 	if command == "define-batch" {
-		if err := defineBatch(lexicon); err != nil {
+		if err := defineBatch(dictionary); err != nil {
 			log.Fatalf("define-batch failed with error: %q", err)
 		}
 	} else if command == "wod" {
 		if err := wod(); err != nil {
 			log.Fatalf("wod failed with error: %q", err)
+		}
+	} else if command == "migrate-to-api" {
+		lex, err := lexdb.NewLexicon()
+		if err != nil {
+			log.Fatalf("Failed to set up database: %s", err)
+		}
+		if err := migrateToApi(lex, dictionary); err != nil {
+			log.Fatalf("migrate-to-api failed with error: %s", err)
 		}
 	}
 }
