@@ -87,9 +87,16 @@ type Lexeme struct {
 	UpdatedAt  *time.Time `db:"updatedAt" json:"updated_at"`
 }
 
+// Stat represents a statistic
+type Stat struct {
+	Name string `json:"name"`
+	Value float64 `json:"value"`
+}
+
 // Dictionary defines the operations that every dictionary must implement.
 type Dictionary interface {
 	Find(name string) (*Lexeme, error)
 	Save(lexeme *Lexeme) error
+	Stats() ([]Stat, error)
 	Close() error
 }

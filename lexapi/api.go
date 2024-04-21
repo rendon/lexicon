@@ -111,6 +111,32 @@ func (a *APIDictionary) post(payload []byte) (*http.Response, error) {
 	return a.httpc.Do(req)
 }
 
+// Stats calls the /lexemes/stats API and returns the parsed result.
+func (a *APIDictionary) Stats() ([]types.Stat, error) {
+	res, err := a.httpc.Get(baseURL + "/lexemes/stats")
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if res.StatusCode != http.StatusOK {
+		log.Printf("Got %s: %s", res.Status, body)
+		return nil, fmt.Errorf("service returned %s: %s", res.Status, body)
+	}
+	var stats []types.Stat
+	if err := json.Unmarshal(body, &stats); err != nil {
+		log.Printf("Unable to unmarshal %s", body)
+		return nil, err
+	}
+	return stats, nil
+}
+
+// Close closes any open connection to the server.
 func (a *APIDictionary) Close() error {
 	// No need to close the http client.
 	return nil

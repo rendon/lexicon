@@ -395,6 +395,19 @@ func wod() error {
 	return nil
 }
 
+func stats(dictionary types.Dictionary) error {
+	stats, err := dictionary.Stats()
+	if err != nil {
+		return err
+	}
+
+	log.Printf("== Stats ==")
+	for _, stat := range stats {
+		log.Printf("%s: %v", stat.Name, stat.Value)
+	}
+	return nil
+}
+
 func main() {
 	log.SetFlags(0)
 	log.SetOutput(os.Stdout)
@@ -424,17 +437,22 @@ func main() {
 	}
 
 	command := os.Args[1]
-	if command == "define" {
+	switch command {
+	case "define":
 		if err := define(dictionary); err != nil {
 			log.Fatalf("define failed with error: %q", err)
 		}
-	} else if command == "define-batch" {
+	case "define-batch":
 		if err := defineBatch(dictionary); err != nil {
 			log.Fatalf("define-batch failed with error: %q", err)
 		}
-	} else if command == "wod" {
+	case "wod":
 		if err := wod(); err != nil {
 			log.Fatalf("wod failed with error: %q", err)
+		}
+	case "stats":
+		if err := stats(dictionary); err != nil {
+			log.Fatalf("stats failed with error: %q", err)
 		}
 	}
 }

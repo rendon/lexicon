@@ -29,8 +29,8 @@ func NewDictionary() (types.Dictionary, error) {
 
 // Find finds and returns a name in the database or returns error if the name
 // does not exist in the database.
-func (d *Lexicon) Find(name string) (*types.Lexeme, error) {
-	rows, err := d.db.Query(`SELECT * FROM lexicon WHERE name = ?`, name)
+func (x *Lexicon) Find(name string) (*types.Lexeme, error) {
+	rows, err := x.db.Query(`SELECT * FROM lexicon WHERE name = ?`, name)
 	if err != nil {
 		log.Printf("Unable to query the database: %s", err)
 		return nil, err
@@ -44,8 +44,8 @@ func (d *Lexicon) Find(name string) (*types.Lexeme, error) {
 	return readRecord(rows)
 }
 
-func (d *Lexicon) exists(name string) bool {
-	rows, err := d.db.Query(`SELECT * FROM lexicon WHERE name = ?`, name)
+func (x *Lexicon) exists(name string) bool {
+	rows, err := x.db.Query(`SELECT * FROM lexicon WHERE name = ?`, name)
 	if err != nil {
 		log.Printf("Unable to query the database: %s", err)
 		return false
@@ -54,8 +54,8 @@ func (d *Lexicon) exists(name string) bool {
 	return rows.Next()
 }
 
-func (d *Lexicon) selectRandom() (*types.Lexeme, error) {
-	rows, err := d.db.Query(`SELECT * FROM lexicon ORDER BY RANDOM() LIMIT 1`)
+func (x *Lexicon) selectRandom() (*types.Lexeme, error) {
+	rows, err := x.db.Query(`SELECT * FROM lexicon ORDER BY RANDOM() LIMIT 1`)
 	if err != nil {
 		log.Printf("Unable to query lexicon table: %s", err)
 		return nil, err
@@ -70,7 +70,7 @@ func (d *Lexicon) selectRandom() (*types.Lexeme, error) {
 }
 
 // Save add lexeme to the database. Returns error if the operation fails.
-func (d *Lexicon) Save(lexeme *types.Lexeme) error {
+func (x *Lexicon) Save(lexeme *types.Lexeme) error {
 	timestamp := time.Now()
 	if lexeme.CreatedAt == nil {
 		lexeme.CreatedAt = &timestamp
@@ -79,7 +79,7 @@ func (d *Lexicon) Save(lexeme *types.Lexeme) error {
 		lexeme.UpdatedAt = &timestamp
 	}
 
-	stmt, err := d.db.Prepare(
+	stmt, err := x.db.Prepare(
 		`INSERT INTO lexicon(name, definition, source, createdAt, updatedAt) values(?,?,?,?,?)`)
 	if err != nil {
 		return fmt.Errorf("unable to insert prepare statement: %s", err)
@@ -100,8 +100,8 @@ func (d *Lexicon) Save(lexeme *types.Lexeme) error {
 	return nil
 }
 
-func (d *Lexicon) All() ([]*types.Lexeme, error) {
-	rows, err := d.db.Query("SELECT * FROM lexicon")
+func (x *Lexicon) All() ([]*types.Lexeme, error) {
+	rows, err := x.db.Query("SELECT * FROM lexicon")
 	if err != nil {
 		log.Printf("Unable to query lexicon table: %s", err)
 		return nil, err
@@ -120,10 +120,15 @@ func (d *Lexicon) All() ([]*types.Lexeme, error) {
 	return all, nil
 }
 
+// Stats returns stats from the database.
+func (x *Lexicon) Stats() ([]types.Stat, error) {
+	return nil, errors.New("not implemented yet")
+}
+
 // Close closes the connection to the database.
-func (d *Lexicon) Close() error {
-	if d.db != nil {
-		if err := d.db.Close(); err != nil {
+func (x *Lexicon) Close() error {
+	if x.db != nil {
+		if err := x.db.Close(); err != nil {
 			log.Printf("Failed to close the database: %s", err)
 			return err
 		}
