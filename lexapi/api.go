@@ -3,6 +3,7 @@ package lexapi
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +17,8 @@ import (
 	"time"
 )
 
-const baseURL = "https://rafaelrendon.io/"
+//const baseURL = "https://rafaelrendon.io/"
+const baseURL = "https://localhost:3001"
 
 var client *http.Client
 
@@ -31,8 +33,14 @@ func NewDictionary() (*APIDictionary, error) {
 	if len(apiKey) == 0 {
 		return nil, errors.New("API_KEY is missing")
 	}
+
+
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
 	return &APIDictionary{
-		httpc:  &http.Client{Timeout: time.Second * 10},
+		httpc:  &http.Client{Timeout: time.Second * 10, Transport: tr},
 		apiKey: apiKey,
 	}, nil
 }
@@ -100,11 +108,13 @@ func (a *APIDictionary) Save(lexeme *types.Lexeme) error {
 		}
 		return errors.New(message)
 	}
+	log.Printf("Migrated %s", lexeme.Name)
 	return nil
 }
 
 func (a *APIDictionary) post(payload []byte) (*http.Response, error) {
-	req, err := http.NewRequest("POST", "https://rafaelrendon.io/lexemes", bytes.NewReader(payload))
+	u := fmt.Sprintf("%s/lexemes", baseURL)
+	req, err := http.NewRequest("POST", u, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
 	}
