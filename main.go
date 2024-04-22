@@ -56,6 +56,13 @@ func getDefinition(name string, dictionary types.Dictionary) (*types.Lexeme, int
 			return nil, 0, err
 		}
 
+		if err := dictapi.Save(name); err != nil {
+			// Not a critical error, simply log a message
+			log.Printf("Unable to register word with Merriam-Webster: %s", err)
+		} else {
+			log.Printf("Saved %q on Merriam-Webster", name)
+		}
+
 		defstr, err := util.Serialize(def)
 		if err != nil {
 			log.Printf("Unable to serialize %v: %s", def, err)
