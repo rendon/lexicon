@@ -97,6 +97,7 @@ type Stat struct {
 type Dictionary interface {
 	Find(name string) (*Lexeme, error)
 	Save(lexeme *Lexeme) error
+	Remove(name string) error
 	Stats() ([]Stat, error)
 	Close() error
 }

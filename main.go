@@ -415,6 +415,19 @@ func stats(dictionary types.Dictionary) error {
 	return nil
 }
 
+func remove(dictionary types.Dictionary) error {
+	if len(os.Args) < 3 {
+		return errors.New("you must provide a name")
+	}
+	name := os.Args[2]
+	if err := dictionary.Remove(name); err != nil {
+		log.Printf("Unable to remove %q: %s", name, err)
+		return err
+	}
+	log.Printf("Removed %q", name)
+	return nil
+}
+
 func main() {
 	log.SetFlags(0)
 	log.SetOutput(os.Stdout)
@@ -460,6 +473,10 @@ func main() {
 	case "stats":
 		if err := stats(dictionary); err != nil {
 			log.Fatalf("stats failed with error: %q", err)
+		}
+	case "rm":
+		if err := remove(dictionary); err != nil {
+			log.Fatalf("rm failed with error: %q", err)
 		}
 	}
 }

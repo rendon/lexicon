@@ -120,6 +120,10 @@ func (x *Lexicon) All() ([]*types.Lexeme, error) {
 	return all, nil
 }
 
+func (x *Lexicon) Remove(name string) error {
+	return errors.New("not implemented yet")
+}
+
 // Stats returns stats from the database.
 func (x *Lexicon) Stats() ([]types.Stat, error) {
 	return nil, errors.New("not implemented yet")

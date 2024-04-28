@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"lexicon/dictapi"
 	"lexicon/types"
 	"lexicon/util"
 	"log"
@@ -101,7 +102,7 @@ func (a *APIDictionary) Save(lexeme *types.Lexeme) error {
 
 func (a *APIDictionary) post(payload []byte) (*http.Response, error) {
 	u := fmt.Sprintf("%s/lexemes/", baseURL)
-	req, err := http.NewRequest("POST", u, bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, u, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +110,31 @@ func (a *APIDictionary) post(payload []byte) (*http.Response, error) {
 	req.Header.Set("X-API-KEY", a.apiKey)
 
 	return a.httpc.Do(req)
+}
+
+func (a *APIDictionary) _delete(name string) (*http.Response, error) {
+	u := fmt.Sprintf("%s/lexemes/%s", baseURL, url.PathEscape(name))
+	req, err := http.NewRequest(http.MethodDelete, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-KEY", a.apiKey)
+
+	return a.httpc.Do(req)
+}
+
+func (a *APIDictionary) Remove(name string) error {
+	_, err := a._delete(name)
+	if err != nil {
+		return err
+	}
+
+	if err := dictapi.Remove(name); err != nil {
+		return err
+	}
+
+	return err
 }
 
 // Stats calls the /lexemes/stats API and returns the parsed result.

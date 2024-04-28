@@ -165,7 +165,8 @@ func Define(name string) (*types.Definition, error) {
 }
 
 var client *http.Client
-func Save(name string) error {
+
+func post(u, name string) error {
 	cookie := os.Getenv("MERRIAM_WEBSTER_COOKIE")
 	if cookie == "" {
 		return errors.New("missing Merriam-Webster cookie")
@@ -175,7 +176,6 @@ func Save(name string) error {
 		client = &http.Client{}
 	}
 
-	u := "https://www.merriam-webster.com/lapi/v1/wordlist/save"
 	payload := fmt.Sprintf("word=%s&type=d", url.QueryEscape(name))
 	req, err := http.NewRequest("POST", u, strings.NewReader(payload))
 	if err != nil {
@@ -201,6 +201,16 @@ func Save(name string) error {
 		return fmt.Errorf("service returned %s: %s", res.Status, body)
 	}
 	return nil
+}
+
+func Save(name string) error {
+	u := "https://www.merriam-webster.com/lapi/v1/wordlist/save"
+	return post(u, name)
+}
+
+func Remove(name string) error {
+	u := "https://www.merriam-webster.com/lapi/v1/wordlist/delete"
+	return post(u, name)
 }
 
 // parseSpellingSuggestions tries to parse spelling suggestions, which is an array of strings. If
