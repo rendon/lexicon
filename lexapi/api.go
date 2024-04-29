@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -88,12 +89,21 @@ func (a *APIDictionary) Save(lexeme *types.Lexeme) error {
 	}
 
 	resp, err := a.post(payload)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusCreated {
+		if strings.Contains(string(body), "already exists") {
+			log.Printf("%s already exists", lexeme.Name)
+			return nil
+		}
+
 		message := fmt.Sprintf("Service returned response %v status code", resp.StatusCode)
-		msg, err := io.ReadAll(resp.Body)
 		if err == nil {
-			message += fmt.Sprintf(" body: %s", msg)
+			message += fmt.Sprintf(" body: %s", body)
 		}
 		return errors.New(message)
 	}

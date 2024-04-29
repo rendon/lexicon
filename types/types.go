@@ -89,7 +89,7 @@ type Lexeme struct {
 
 // Stat represents a statistic
 type Stat struct {
-	Name string `json:"name"`
+	Name  string  `json:"name"`
 	Value float64 `json:"value"`
 }
 

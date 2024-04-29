@@ -198,6 +198,10 @@ func post(u, name string) error {
 	}
 
 	if res.StatusCode != http.StatusOK {
+		if strings.Contains(string(body), "word already exists") {
+			log.Printf("%s already exists in Merriam-Webster", name)
+			return nil
+		}
 		return fmt.Errorf("service returned %s: %s", res.Status, body)
 	}
 	return nil
